@@ -12,7 +12,6 @@ def run_command(cmd: str) -> str:
     return result.stdout + result.stderr
 
 coder = {
-    "system": "You are a C coder. You write working C programs. Use the tools available to you.",
     "model": "qwen3:8b",
     "tools": [write_file, run_command]
 }
