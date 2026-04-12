@@ -28,5 +28,5 @@ coder = {
     "tools": [write_file, run_command]
 }
 
-output = coder — "Write a hello, world program in C."
+output = coder — "Write a hello, world program in C, save it to hello.c, compile it with gcc, and run it."
 print(output["message"]["content"])

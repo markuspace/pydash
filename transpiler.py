@@ -80,9 +80,11 @@ def infer(agent, prompt: str) -> dict:
         for tc in msg["tool_calls"]:
             name = tc["function"]["name"]
             args = tc["function"]["arguments"]
+            print(f"  → calling {name}({args})")
             if isinstance(args, str):
                 args = json.loads(args)
             result = tool_map[name](**args)
+            print(f"  ← {result}")
             messages.append({
                 "role": "tool",
                 "content": str(result),
