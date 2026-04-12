@@ -1,7 +1,7 @@
 import ollama
 import json
 
-def infer(agent, prompt: str) -> str:
+def infer(agent, prompt: str) -> dict:
     messages = [
         {"role": "system", "content": agent.get("system", "")},
         {"role": "user", "content": prompt},
@@ -16,7 +16,7 @@ def infer(agent, prompt: str) -> str:
         )
         msg = resp["message"]
         if not msg.get("tool_calls"):
-            return msg["content"]
+            return resp
         messages.append(msg)
         for tc in msg["tool_calls"]:
             name = tc["function"]["name"]
@@ -27,15 +27,16 @@ def infer(agent, prompt: str) -> str:
             messages.append({
                 "role": "tool",
                 "content": str(result),
-                "tool_call_id": tc["id"],
             })
-    return "Max turns exceeded"
-
-def read_file(path: str) -> str:
-    with open(path) as f:
-        return f.read()
+    return resp
 
 def write_file(path: str, content: str) -> str:
+    """Write content to a file. Strips markdown code fences.
+
+    Args:
+        path: File path to write to
+        content: Content to write
+    """
     import re
     content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
     content = content.strip()
@@ -44,33 +45,21 @@ def write_file(path: str, content: str) -> str:
     return f"wrote {path}"
 
 def run_command(cmd: str) -> str:
-    import subprocess
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    return result.stdout + result.stderr
+    """Run a shell command and return stdout + stderr.
 
-def read_file(path: str) -> str:
-    with open(path) as f:
-        return f.read()
-
-def write_file(path: str, content: str) -> str:
-    import re
-    content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
-    content = content.strip()
-    with open(path, "w") as f:
-        f.write(content)
-    return f"wrote {path}"
-
-def run_command(cmd: str) -> str:
+    Args:
+        cmd: Shell command to execute
+    """
     import subprocess
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     return result.stdout + result.stderr
 
 coder = {
-    "system": "You are a C coder. You write working C programs.",
+    "system": "You are a C coder. You write working C programs. Use the tools available to you.",
     "model": "qwen3:8b",
-    "tools": [read_file, write_file, run_command]
+    "tools": [write_file, run_command]
 }
 
 output = infer(coder, "Write a hello, world program in C.")
-print(output)
+print(output["message"]["content"])
 

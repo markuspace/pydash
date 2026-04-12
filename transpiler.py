@@ -60,7 +60,7 @@ def runtime():
     return """import ollama
 import json
 
-def infer(agent, prompt: str) -> str:
+def infer(agent, prompt: str) -> dict:
     messages = [
         {"role": "system", "content": agent.get("system", "")},
         {"role": "user", "content": prompt},
@@ -75,7 +75,7 @@ def infer(agent, prompt: str) -> str:
         )
         msg = resp["message"]
         if not msg.get("tool_calls"):
-            return msg["content"]
+            return resp
         messages.append(msg)
         for tc in msg["tool_calls"]:
             name = tc["function"]["name"]
@@ -86,9 +86,8 @@ def infer(agent, prompt: str) -> str:
             messages.append({
                 "role": "tool",
                 "content": str(result),
-                "tool_call_id": tc["id"],
             })
-    return "Max turns exceeded"
+    return resp
 
 """
 
