@@ -79,11 +79,15 @@ def _build_tool_schema(fn):
         }
         if param.default == inspect.Parameter.empty:
             required.append(name)
+    try:
+        source = inspect.getsource(fn).strip()
+    except OSError:
+        source = f"{fn.__name__} with {', '.join(sig.parameters.keys())}"
     return {
         "type": "function",
         "function": {
             "name": fn.__name__,
-            "description": f"{fn.__name__} with {', '.join(sig.parameters.keys())}",
+            "description": source,
             "parameters": {
                 "type": "object",
                 "properties": params,
