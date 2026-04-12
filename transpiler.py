@@ -59,6 +59,31 @@ def runtime():
     """Generate the runtime helpers."""
     return """import ollama
 import json
+import inspect
+
+def _build_tool_schema(fn):
+    sig = inspect.signature(fn)
+    params = {}
+    required = []
+    for name, param in sig.parameters.items():
+        params[name] = {
+            "type": "string" if param.annotation in (str, inspect.Parameter.empty) else str(param.annotation).lower().replace("<class '", "").replace("'>", ""),
+            "description": name,
+        }
+        if param.default == inspect.Parameter.empty:
+            required.append(name)
+    return {
+        "type": "function",
+        "function": {
+            "name": fn.__name__,
+            "description": f"{fn.__name__} with {', '.join(sig.parameters.keys())}",
+            "parameters": {
+                "type": "object",
+                "properties": params,
+                "required": required,
+            },
+        },
+    }
 
 def infer(agent, prompt: str) -> dict:
     messages = [
@@ -67,11 +92,12 @@ def infer(agent, prompt: str) -> dict:
     ]
     tools = agent.get("tools", [])
     tool_map = {fn.__name__: fn for fn in tools}
+    tool_schemas = [_build_tool_schema(fn) for fn in tools]
     for _ in range(5):
         resp = ollama.chat(
             model=agent.get("model", "qwen3:8b"),
             messages=messages,
-            tools=tools if tools else None,
+            tools=tool_schemas if tool_schemas else None,
         )
         msg = resp["message"]
         if not msg.get("tool_calls"):

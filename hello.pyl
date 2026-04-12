@@ -1,10 +1,5 @@
 def write_file(path: str, content: str) -> str:
-    """Write content to a file. Strips markdown code fences.
-
-    Args:
-        path: File path to write to
-        content: Content to write
-    """
+    """write_file with path, content"""
     import re
     content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
     content = content.strip()
@@ -13,11 +8,7 @@ def write_file(path: str, content: str) -> str:
     return f"wrote {path}"
 
 def run_command(cmd: str) -> str:
-    """Run a shell command and return stdout + stderr.
-
-    Args:
-        cmd: Shell command to execute
-    """
+    """run_command with cmd"""
     import subprocess
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     return result.stdout + result.stderr
