@@ -1,0 +1,12 @@
+agent Helper {
+    name: "Helper"
+    role: "assist with file operations"
+}
+
+tool read_file(path: str) -> str {
+    with open(path) as f:
+        return f.read()
+}
+
+content = infer "Summarize the contents of the file."
+print(content)
