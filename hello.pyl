@@ -1,9 +1,42 @@
-agent translator {
-    prompt: "You translate to the requested language, or English if none specified.",
-    model: "qwen3:8b"
+def read_file(path: str) -> str:
+    with open(path) as f:
+        return f.read()
+
+def write_file(path: str, content: str) -> str:
+    import re
+    content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
+    content = content.strip()
+    with open(path, "w") as f:
+        f.write(content)
+    return f"wrote {path}"
+
+def run_command(cmd: str) -> str:
+    import subprocess
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+def read_file(path: str) -> str:
+    with open(path) as f:
+        return f.read()
+
+def write_file(path: str, content: str) -> str:
+    import re
+    content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
+    content = content.strip()
+    with open(path, "w") as f:
+        f.write(content)
+    return f"wrote {path}"
+
+def run_command(cmd: str) -> str:
+    import subprocess
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+coder = {
+    "system": "You are a C coder. You write working C programs.",
+    "model": "qwen3:8b",
+    "tools": [read_file, write_file, run_command]
 }
 
-english = translator -- "bonjour, monde"
-french = translator — "'hello, world' to English, please."
-print(english)
-print(french)
+output = coder — "Write a hello, world program in C."
+print(output)
