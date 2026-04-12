@@ -26,9 +26,9 @@ def _build_tool_schema(fn):
         },
     }
 
-def infer(agent, prompt: str) -> dict:
+def _infer(agent, prompt: str, system: str = "") -> dict:
     messages = [
-        {"role": "system", "content": agent.get("system", "")},
+        {"role": "system", "content": agent.get("system", system)},
         {"role": "user", "content": prompt},
     ]
     tools = agent.get("tools", [])
@@ -77,6 +77,6 @@ coder = {
     "tools": [write_file, run_command]
 }
 
-output = infer(coder, "Write a hello, world program in C, save it to hello.c, compile it with gcc, and run it.")
+output = _infer(coder, "Write a hello, world program in C, save it to hello.c, compile it with gcc, and run it.", system="You are coder.")
 print(output["message"]["content"])
 

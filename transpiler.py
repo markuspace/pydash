@@ -40,7 +40,14 @@ def transpile(source: str) -> str:
             start = tok.start[1]  # column of NAME
             end = tokens[i + 2].end[1]  # column after STRING
             line_num = tok.start[0]
-            replacements.append((line_num, start, end, f"infer({name}, {prompt})"))
+            replacements.append(
+                (
+                    line_num,
+                    start,
+                    end,
+                    f'_infer({name}, {prompt}, system="You are {name}.")',
+                )
+            )
             i += 3
             continue
         i += 1
@@ -85,9 +92,9 @@ def _build_tool_schema(fn):
         },
     }
 
-def infer(agent, prompt: str) -> dict:
+def _infer(agent, prompt: str, system: str = "") -> dict:
     messages = [
-        {"role": "system", "content": agent.get("system", "")},
+        {"role": "system", "content": agent.get("system", system)},
         {"role": "user", "content": prompt},
     ]
     tools = agent.get("tools", [])

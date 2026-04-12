@@ -57,6 +57,19 @@ From 9 paradigms studied (Reactive, Dataflow, Actor, Event-Loop, State Machines,
 
 These principles inform future design. They don't constrain the MVP.
 
+## Design Principles
+
+### Self-Documenting Tool Signatures
+
+Tool functions should NOT need docstrings to work. The function name and parameter names ARE the description. The preprocessor auto-generates tool schemas from the signature:
+
+```
+write_file(path: str, content: str) → schema: "write_file with path, content"
+run_command(cmd: str) → schema: "run_command with cmd"
+```
+
+This is a constraint, not a convenience. If the function name isn't clear enough, that's a naming problem, not a documentation problem. The language forces good naming conventions at the fundamental level. No additional comments should be required to make tool calling work.
+
 ## Open Questions
 
 1. **Streaming** — how do we handle streaming responses at the language level?
