@@ -1,14 +1,16 @@
 """
 PyL — Syntax Expansion for Python LLM Code
 
-Pure tokenizer-based transpiler. The source is already valid Python.
-The only new syntax is the em-dash: NAME — "prompt" → infer(NAME, "prompt")
-Everything else passes through unchanged.
+Two-step transpiler:
+  1. Replace em-dash with _infer() calls → valid Python
+  2. Parse with ast, extract function source, attach __schema__ attributes
 """
 
 import sys
 import tokenize
 import io
+import ast
+import json
 
 
 class GoldenPathError(Exception):
@@ -17,16 +19,13 @@ class GoldenPathError(Exception):
     pass
 
 
-def transpile(source: str) -> str:
-    """Find em-dash tokens, expand to infer() calls, return Python."""
+def step1_replace_emdash(source: str) -> str:
+    """Replace NAME — "prompt" with _infer(NAME, "prompt", system="You are NAME.")."""
     tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
-
-    # Find all em-dash positions and collect replacements
-    replacements = []  # (start_pos, end_pos, replacement_text)
+    replacements = []
     i = 0
     while i < len(tokens):
         tok = tokens[i]
-        # Look for NAME — "STRING"
         if (
             tok.type == tokenize.NAME
             and i + 2 < len(tokens)
@@ -36,9 +35,8 @@ def transpile(source: str) -> str:
         ):
             name = tok.string
             prompt = tokens[i + 2].string
-            # Use original source positions to preserve whitespace
-            start = tok.start[1]  # column of NAME
-            end = tokens[i + 2].end[1]  # column after STRING
+            start = tok.start[1]
+            end = tokens[i + 2].end[1]
             line_num = tok.start[0]
             replacements.append(
                 (
@@ -52,49 +50,72 @@ def transpile(source: str) -> str:
             continue
         i += 1
 
-    # Apply replacements line by line
     lines = source.split("\n")
     for line_num, start, end, replacement in replacements:
         lines[line_num - 1] = (
             lines[line_num - 1][:start] + replacement + lines[line_num - 1][end:]
         )
 
-    return runtime() + "\n".join(lines)
+    return "\n".join(lines)
+
+
+def step2_attach_schemas(source: str) -> str:
+    """Parse valid Python, extract function source, attach __schema__ attributes."""
+    tree = ast.parse(source)
+    lines = source.split("\n")
+    schema_lines = []
+
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.FunctionDef):
+            start = node.lineno - 1
+            end = node.end_lineno
+            func_source = "\n".join(lines[start:end])
+
+            # Build parameter schema from AST
+            params = {}
+            required = []
+            for arg in node.args.args:
+                if arg.arg == "self":
+                    continue
+                type_name = "string"
+                if arg.annotation:
+                    type_name = ast.unparse(arg.annotation).lower()
+                    if type_name == "str":
+                        type_name = "string"
+                params[arg.arg] = {"type": type_name, "description": arg.arg}
+                required.append(arg.arg)
+
+            schema = {
+                "type": "function",
+                "function": {
+                    "name": node.name,
+                    "description": func_source,
+                    "parameters": {
+                        "type": "object",
+                        "properties": params,
+                        "required": required,
+                    },
+                },
+            }
+            schema_lines.append(
+                (
+                    node.end_lineno,
+                    f"{node.name}.__schema__ = {json.dumps(schema, indent=4)}",
+                )
+            )
+
+    # Insert schema assignments after each function, not at end of file
+    output_lines = source.split("\n")
+    for line_num, schema_line in reversed(schema_lines):
+        output_lines.insert(line_num, schema_line)
+
+    return "\n".join(output_lines)
 
 
 def runtime():
     """Generate the runtime helpers."""
     return """import ollama
 import json
-import inspect
-
-def _build_tool_schema(fn):
-    sig = inspect.signature(fn)
-    params = {}
-    required = []
-    for name, param in sig.parameters.items():
-        params[name] = {
-            "type": "string" if param.annotation in (str, inspect.Parameter.empty) else str(param.annotation).lower().replace("<class '", "").replace("'>", ""),
-            "description": name,
-        }
-        if param.default == inspect.Parameter.empty:
-            required.append(name)
-    try:
-        source = inspect.getsource(fn).strip()
-    except OSError:
-        source = f"{fn.__name__} with {', '.join(sig.parameters.keys())}"
-    return {
-        "type": "function",
-        "function": {
-            "name": fn.__name__,
-            "description": source,
-            "parameters": {
-                "type": "object",
-                "properties": params,
-                "required": required,
-            },
-        },
-    }
 
 def _infer(agent, prompt: str, system: str = "") -> dict:
     messages = [
@@ -103,7 +124,7 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
     ]
     tools = agent.get("tools", [])
     tool_map = {fn.__name__: fn for fn in tools}
-    tool_schemas = [_build_tool_schema(fn) for fn in tools]
+    tool_schemas = [getattr(fn, "__schema__", {}) for fn in tools]
     for _ in range(5):
         resp = ollama.chat(
             model=agent.get("model", "qwen3:8b"),
@@ -131,6 +152,13 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
 """
 
 
+def transpile(source: str) -> str:
+    """Two-step transpile: em-dash → valid Python → attach schemas."""
+    step1 = step1_replace_emdash(source)
+    step2 = step2_attach_schemas(step1)
+    return runtime() + step2
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python transpiler.py <file.pyl>", file=sys.stderr)
@@ -141,6 +169,14 @@ def main():
         source = f.read()
 
     try:
+        step1 = step1_replace_emdash(source)
+        # Write intermediate file for inspection
+        stem = filepath.rsplit(".", 1)[0]
+        temp_path = stem + ".tmp.py"
+        with open(temp_path, "w") as f:
+            f.write(step1)
+        print(f"  → {temp_path} (intermediate)", file=sys.stderr)
+
         python_code = transpile(source)
         print(python_code)
     except GoldenPathError as e:

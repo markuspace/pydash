@@ -1,34 +1,5 @@
 import ollama
 import json
-import inspect
-
-def _build_tool_schema(fn):
-    sig = inspect.signature(fn)
-    params = {}
-    required = []
-    for name, param in sig.parameters.items():
-        params[name] = {
-            "type": "string" if param.annotation in (str, inspect.Parameter.empty) else str(param.annotation).lower().replace("<class '", "").replace("'>", ""),
-            "description": name,
-        }
-        if param.default == inspect.Parameter.empty:
-            required.append(name)
-    try:
-        source = inspect.getsource(fn).strip()
-    except OSError:
-        source = f"{fn.__name__} with {', '.join(sig.parameters.keys())}"
-    return {
-        "type": "function",
-        "function": {
-            "name": fn.__name__,
-            "description": source,
-            "parameters": {
-                "type": "object",
-                "properties": params,
-                "required": required,
-            },
-        },
-    }
 
 def _infer(agent, prompt: str, system: str = "") -> dict:
     messages = [
@@ -37,7 +8,7 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
     ]
     tools = agent.get("tools", [])
     tool_map = {fn.__name__: fn for fn in tools}
-    tool_schemas = [_build_tool_schema(fn) for fn in tools]
+    tool_schemas = [getattr(fn, "__schema__", {}) for fn in tools]
     for _ in range(5):
         resp = ollama.chat(
             model=agent.get("model", "qwen3:8b"),
@@ -69,11 +40,54 @@ def write_file(path: str, content: str) -> str:
     with open(path, "w") as f:
         f.write(content)
     return f"wrote {path}"
+write_file.__schema__ = {
+    "type": "function",
+    "function": {
+        "name": "write_file",
+        "description": "def write_file(path: str, content: str) -> str:\n    import re\n    content = re.sub(r'^```.*$\\n?', '', content, flags=re.MULTILINE)\n    content = content.strip()\n    with open(path, \"w\") as f:\n        f.write(content)\n    return f\"wrote {path}\"",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "path"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "content"
+                }
+            },
+            "required": [
+                "path",
+                "content"
+            ]
+        }
+    }
+}
 
 def run_command(cmd: str) -> str:
     import subprocess
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     return result.stdout + result.stderr
+run_command.__schema__ = {
+    "type": "function",
+    "function": {
+        "name": "run_command",
+        "description": "def run_command(cmd: str) -> str:\n    import subprocess\n    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n    return result.stdout + result.stderr",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cmd": {
+                    "type": "string",
+                    "description": "cmd"
+                }
+            },
+            "required": [
+                "cmd"
+            ]
+        }
+    }
+}
 
 coder = {
     "model": "qwen3:8b",
