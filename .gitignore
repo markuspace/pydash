@@ -2,7 +2,7 @@ __pycache__/
 .ruff_cache/
 *.pyc
 *.pyo
-*.pyd
+
 *.egg-info/
 dist/
 build/
@@ -10,8 +10,5 @@ build/
 venv/
 *.swp
 *.out
-hello
-hello.c
-hello.tmp.py
-hello.py
+
 * (Copy).*
