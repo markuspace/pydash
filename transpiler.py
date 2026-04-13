@@ -13,12 +13,6 @@ import ast
 import json
 
 
-class GoldenPathError(Exception):
-    """Compiler error — code violates the golden path."""
-
-    pass
-
-
 def step1_replace_emdash(source: str) -> str:
     """Replace NAME — "prompt" with _infer(NAME, "prompt", system="You are NAME.")."""
     tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
@@ -89,7 +83,7 @@ def step2_attach_schemas(source: str) -> str:
                 "type": "function",
                 "function": {
                     "name": node.name,
-                    "description": func_source,
+                    "description": f"Python function source. Here is the implementation:\n\n{func_source}",
                     "parameters": {
                         "type": "object",
                         "properties": params,
@@ -123,14 +117,19 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
         {"role": "user", "content": prompt},
     ]
     tools = agent.get("tools", [])
+    max_turns = agent.get("max_turns", 0)
     tool_map = {fn.__name__: fn for fn in tools}
     tool_schemas = [getattr(fn, "__schema__", {}) for fn in tools]
-    for _ in range(5):
+    turns = 0
+    while True:
         resp = ollama.chat(
-            model=agent.get("model", "qwen3:8b"),
+            model=agent["model"],
             messages=messages,
             tools=tool_schemas if tool_schemas else None,
         )
+        turns += 1
+        if max_turns and turns >= max_turns:
+            return resp
         msg = resp["message"]
         if not msg.get("tool_calls"):
             return resp
@@ -147,7 +146,6 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
                 "role": "tool",
                 "content": str(result),
             })
-    return resp
 
 """
 
@@ -179,7 +177,7 @@ def main():
 
         python_code = transpile(source)
         print(python_code)
-    except GoldenPathError as e:
+    except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 

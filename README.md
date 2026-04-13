@@ -1,61 +1,103 @@
-# PyL — Syntax Preprocessor for Python LLM Code
+# PyL
 
-PyL adds two keywords to Python: `agent` and `infer`. It expands them into working Python and passes everything else through unchanged.
-
-## The Problem
-
-AI coding assistants fail not because they can't write code, but because they drown in surface area. The gap between a single-function benchmark (~90% success) and a real-world multi-file task (~5% success) is 18x — and the only difference is how many things the LLM has to coordinate: imports, dependencies, build configs, tool schemas, prompt strings, file paths.
-
-PyL compresses LLM boilerplate into minimal syntax. The intent is the code.
+A syntax preprocessor for Python. Expands LLM inference boilerplate into working Python. Passes everything else through unchanged.
 
 ## Hello World
 
+**hello.pyl** — 20 lines. A coder agent that writes, compiles, and runs C code:
+
 ```pyl
-agent Hello {
-    name: "Hello"
-    role: "greeting agent"
+def write_file(path: str, content: str) -> str:
+    import re
+    content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
+    content = content.strip()
+    with open(path, "w") as f:
+        f.write(content)
+    return f"wrote {path}"
+
+def run_command(cmd: str) -> str:
+    import subprocess
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+coder = {
+    "model": "qwen3:8b",
+    "tools": [write_file, run_command]
 }
 
-greeting = infer "Say hello to the world."
-print(greeting)
+response = coder — "Write a hello, world program in C, save it to hello.c, compile it with gcc, and run it."
+print(response["message"]["content"])
 ```
 
-No `import openai`. No `client = OpenAI()`. No message lists. No JSON parsing. Five lines.
-
-## How It Works
-
-PyL reads `.pyl` files, finds LLM-specific syntax, validates it, expands it into Python, and passes everything else through. Python is the runtime.
+**Run it:**
 
 ```bash
-python src/transpiler.py hello.pyl > hello.py
+python transpiler.py hello.pyl > hello.py
 python hello.py
 ```
 
-PyL only validates its own primitives. Everything else is Python, and Python validates it at runtime.
+**Output:**
 
-## Design Principles
+```
+  → calling write_file({'path': 'hello.c', 'content': '#include <stdio.h>\n...'})
+  ← wrote hello.c
+  → calling run_command({'cmd': 'gcc hello.c -o hello'})
+  ←
+  → calling run_command({'cmd': './hello'})
+  ← hello, world
 
-- **Remove boilerplate** — every primitive eliminates a layer of setup the LLM shouldn't have to reason about
-- **Golden paths only** — one way to use each primitive. PyL rejects invalid LLM syntax.
-- **Small surface area** — fewer choices = less hallucination, less drift, more predictable output
-- **Syntax preprocessor** — we expand LLM syntax into Python. Everything else is Python.
+The "hello, world" program has been successfully executed!
+```
 
-## Current Primitives
+## How It Works
 
-| Keyword | What it does |
+Two-step transpile:
+
+1. Replace `NAME — "prompt"` with `_infer(NAME, "prompt", system="You are NAME.")`
+2. Parse the valid Python with `ast`, extract function source, attach `__schema__` attributes
+
+The generated `.py` file is fully inspectable. An intermediate `.tmp.py` is also written after step 1.
+
+## What It Does
+
+| What you write | What it becomes |
 |---|---|
-| `agent` | Declares identity — expands into system prompt |
-| `infer` | Calls an LLM — expands into `ollama.chat()` |
+| `coder` | System prompt: `"You are coder."` |
+| `—` | `_infer()` — the full tool-calling loop |
+| `"prompt"` | User message |
 
-Everything else is Python. `if`, `for`, `while`, functions, variables, imports — all pass through unchanged.
+The preprocessor also generates tool schemas from function signatures and attaches them as `__schema__` attributes. The full function source becomes the tool description.
 
-## What's Next
+## Design Decisions
 
-- `tool` — typed capability declarations
-- `context` — conversation state as a first-class type
-- `memory` — persistence as a language feature
-- Streaming responses
-- Model selection
+- No system prompts needed — the agent's name is the prompt  (`coder` → `"You are coder."`)
+- No tool prompts needed — the entire function source is used as the tool description
+- Only `—` is new syntax — everything else is Python
+- No custom runtime — Python is the runtime
+- Generated code is fully inspectable
+
+## Current State
+
+This is an early-stage conceptual project. It works for the hello world example, but barely does anything beyond that:
+
+- Only the em-dash (`—`) syntax is implemented
+- Tied to Ollama — no other providers
+- No streaming, no error handling, no retries
+- No memory, no context management, no multi-agent
+- Tool schemas are auto-generated from function source only
+
+We're actively building it out. This is a proof of concept, not a production tool.
+
+
+## Quick Start
+
+```bash
+pip install ollama
+ollama pull qwen3:8b
+
+python transpiler.py hello.pyl > hello.py
+python hello.py
+```
 
 ## License
 
