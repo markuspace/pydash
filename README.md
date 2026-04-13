@@ -1,4 +1,4 @@
-# PyL
+# py—
 
 A syntax preprocessor for Python. One character — `—` — absorbs the boilerplate of LLM inference.
 
@@ -25,9 +25,9 @@ The generated `.py` is fully inspectable. An intermediate `.tmp.py` is also writ
 
 ## Hello World
 
-Flow: `hello.pyl` → `transpiler` → `hello.py` → output
+Flow: `hello.py—` → `transpiler` → `hello.py` → output
 
-### 1. hello.pyl (20 lines)
+### 1. hello.py— (20 lines)
 
 ```python
 def write_file(path: str, content: str) -> str:
@@ -148,7 +148,7 @@ print(response["message"]["content"])
 ### 3. Run it
 
 ```bash
-python transpiler.py hello.pyl > hello.py
+python transpiler.py hello.py— > hello.py
 python hello.py
 ```
 
@@ -192,7 +192,7 @@ Early-stage. Works for hello world. Not much beyond:
 pip install ollama
 ollama pull qwen3:8b
 
-python transpiler.py hello.pyl > hello.py
+python transpiler.py hello.py— > hello.py
 python hello.py
 ```
 

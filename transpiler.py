@@ -1,5 +1,5 @@
 """
-PyL — Syntax Expansion for Python LLM Code
+py— — Syntax Expansion for Python LLM Code
 
 Two-step transpiler:
   1. Replace em-dash with _infer() calls → valid Python
@@ -159,7 +159,7 @@ def transpile(source: str) -> str:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python transpiler.py <file.pyl>", file=sys.stderr)
+        print("Usage: python transpiler.py <file.py->", file=sys.stderr)
         sys.exit(1)
 
     filepath = sys.argv[1]
