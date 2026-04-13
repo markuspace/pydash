@@ -159,7 +159,7 @@ def transpile(source: str) -> str:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python transpiler.py <file.py->", file=sys.stderr)
+        print("Usage: python transpiler.py <file.pyd>", file=sys.stderr)
         sys.exit(1)
 
     filepath = sys.argv[1]
