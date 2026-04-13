@@ -12,3 +12,17 @@ venv/
 *.out
 
 * (Copy).*
+
+# Generated files
+*.tmp.py
+goodbye.py
+goodbye.sh
+socrates.py
+socrates.tmp.py
+
+# Generated files
+*.tmp.py
+goodbye.py
+goodbye.sh
+socrates.py
+socrates.tmp.py
