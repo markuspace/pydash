@@ -4,7 +4,7 @@ A syntax preprocessor for Python. Expands LLM inference boilerplate into working
 
 ## Hello World
 
-**hello.pyl** — 20 lines. A coder agent that writes, compiles, and runs C code:
+**hello.pyl** (20 lines):
 
 ```pyl
 def write_file(path: str, content: str) -> str:
@@ -29,12 +29,73 @@ response = coder — "Write a hello, world program in C, save it to hello.c, com
 print(response["message"]["content"])
 ```
 
-**Run it:**
+**hello.py** (103 lines):
 
-```bash
-python transpiler.py hello.pyl > hello.py
-python hello.py
+```python
+import ollama
+import json
+
+def _infer(agent, prompt: str, system: str = "") -> dict:
+    messages = [
+        {"role": "system", "content": agent.get("system", system)},
+        {"role": "user", "content": prompt},
+    ]
+    tools = agent.get("tools", [])
+    max_turns = agent.get("max_turns", 0)
+    tool_map = {fn.__name__: fn for fn in tools}
+    tool_schemas = [getattr(fn, "__schema__", {}) for fn in tools]
+    turns = 0
+    while True:
+        resp = ollama.chat(
+            model=agent["model"],
+            messages=messages,
+            tools=tool_schemas if tool_schemas else None,
+        )
+        turns += 1
+        if max_turns and turns >= max_turns:
+            return resp
+        msg = resp["message"]
+        if not msg.get("tool_calls"):
+            return resp
+        messages.append(msg)
+        for tc in msg["tool_calls"]:
+            name = tc["function"]["name"]
+            args = tc["function"]["arguments"]
+            if isinstance(args, str):
+                args = json.loads(args)
+            result = tool_map[name](**args)
+            messages.append({
+                "role": "tool",
+                "content": str(result),
+            })
+
+def write_file(path: str, content: str) -> str:
+    import re
+    content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
+    content = content.strip()
+    with open(path, "w") as f:
+        f.write(content)
+    return f"wrote {path}"
+
+write_file.__schema__ = { ... }
+
+def run_command(cmd: str) -> str:
+    import subprocess
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+run_command.__schema__ = { ... }
+
+coder = {
+    "model": "qwen3:8b",
+    "tools": [write_file, run_command]
+}
+
+response = _infer(coder, "Write a hello, world program in C, save it to hello.c, compile it with gcc, and run it.", system="You are coder.")
+print(response["message"]["content"])
 ```
+
+The em-dash replaces the inference call, but the boilerplate reduction goes further: tool schemas are auto-generated from function source, system prompts are inferred from variable names, and no manual JSON schema registration is needed. Everything is aligned with the same philosophy — reduce surface area so the LLM only reasons about what matters.
 
 **Output:**
 

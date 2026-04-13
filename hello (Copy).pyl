@@ -1,9 +1,0 @@
-agent translator {
-    prompt: "You translate to the requested language, or English if none specified.",
-    model: "qwen3:8b"
-}
-
-english = translator -- "bonjour, monde"
-french = translator — "'hello, world' to English, please."
-print(english)
-print(french)

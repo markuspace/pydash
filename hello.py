@@ -7,14 +7,19 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
         {"role": "user", "content": prompt},
     ]
     tools = agent.get("tools", [])
+    max_turns = agent.get("max_turns", 0)
     tool_map = {fn.__name__: fn for fn in tools}
     tool_schemas = [getattr(fn, "__schema__", {}) for fn in tools]
-    for _ in range(5):
+    turns = 0
+    while True:
         resp = ollama.chat(
-            model=agent.get("model", "qwen3:8b"),
+            model=agent["model"],
             messages=messages,
             tools=tool_schemas if tool_schemas else None,
         )
+        turns += 1
+        if max_turns and turns >= max_turns:
+            return resp
         msg = resp["message"]
         if not msg.get("tool_calls"):
             return resp
@@ -31,7 +36,6 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
                 "role": "tool",
                 "content": str(result),
             })
-    return resp
 
 def write_file(path: str, content: str) -> str:
     import re
@@ -44,7 +48,7 @@ write_file.__schema__ = {
     "type": "function",
     "function": {
         "name": "write_file",
-        "description": "def write_file(path: str, content: str) -> str:\n    import re\n    content = re.sub(r'^```.*$\\n?', '', content, flags=re.MULTILINE)\n    content = content.strip()\n    with open(path, \"w\") as f:\n        f.write(content)\n    return f\"wrote {path}\"",
+        "description": "Python function source. Here is the implementation:\n\ndef write_file(path: str, content: str) -> str:\n    import re\n    content = re.sub(r'^```.*$\\n?', '', content, flags=re.MULTILINE)\n    content = content.strip()\n    with open(path, \"w\") as f:\n        f.write(content)\n    return f\"wrote {path}\"",
         "parameters": {
             "type": "object",
             "properties": {
@@ -73,7 +77,7 @@ run_command.__schema__ = {
     "type": "function",
     "function": {
         "name": "run_command",
-        "description": "def run_command(cmd: str) -> str:\n    import subprocess\n    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n    return result.stdout + result.stderr",
+        "description": "Python function source. Here is the implementation:\n\ndef run_command(cmd: str) -> str:\n    import subprocess\n    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n    return result.stdout + result.stderr",
         "parameters": {
             "type": "object",
             "properties": {
