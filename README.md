@@ -1,4 +1,4 @@
-# py-dash
+# pydash
 
 A syntax preprocessor for Python. One character — `—` — absorbs the boilerplate of LLM inference.
 
