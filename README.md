@@ -1,12 +1,35 @@
 # PyL
 
-A syntax preprocessor for Python. Expands LLM inference boilerplate into working Python. Passes everything else through unchanged.
+A syntax preprocessor for Python. One character — `—` — absorbs the boilerplate of LLM inference.
+
+## The Problem
+
+LLM inference requires:
+- HTTP client setup
+- Message construction (system + user)
+- Tool schema registration
+- JSON parsing
+- Tool-calling loop
+- Result handling
+
+Write `coder — "prompt"`. The preprocessor expands it into all of the above. You write 20 lines. It becomes 103. The surface area is yours to reason in, not manage.
+
+## How It Works
+
+Two-step transpile:
+
+1. `NAME — "prompt"` → `_infer(NAME, "prompt", system="You are NAME.")`
+2. AST parse → extract function source → attach `__schema__` attributes
+
+The generated `.py` is fully inspectable. An intermediate `.tmp.py` is also written.
 
 ## Hello World
 
-**hello.pyl** (20 lines):
+Flow: `hello.pyl` → `transpiler` → `hello.py` → output
 
-```pyl
+### 1. hello.pyl (20 lines)
+
+```python
 def write_file(path: str, content: str) -> str:
     import re
     content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)
@@ -29,7 +52,7 @@ response = coder — "Write a hello, world program in C, save it to hello.c, com
 print(response["message"]["content"])
 ```
 
-**hello.py** (103 lines):
+### 2. hello.py (103 lines)
 
 ```python
 import ollama
@@ -61,9 +84,11 @@ def _infer(agent, prompt: str, system: str = "") -> dict:
         for tc in msg["tool_calls"]:
             name = tc["function"]["name"]
             args = tc["function"]["arguments"]
+            print(f"  → calling {name}({args})")
             if isinstance(args, str):
                 args = json.loads(args)
             result = tool_map[name](**args)
+            print(f"  ← {result}")
             messages.append({
                 "role": "tool",
                 "content": str(result),
@@ -76,15 +101,40 @@ def write_file(path: str, content: str) -> str:
     with open(path, "w") as f:
         f.write(content)
     return f"wrote {path}"
-
-write_file.__schema__ = { ... }
+write_file.__schema__ = {
+    "type": "function",
+    "function": {
+        "name": "write_file",
+        "description": "Python function source. Here is the implementation:\n\ndef write_file(path: str, content: str) -> str:\n    import re\n    content = re.sub(r'^```.*$\n?', '', content, flags=re.MULTILINE)\n    content = content.strip()\n    with open(path, \"w\") as f:\n        f.write(content)\n    return f\"wrote {path}\"",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "path"},
+                "content": {"type": "string", "description": "content"}
+            },
+            "required": ["path", "content"]
+        }
+    }
+}
 
 def run_command(cmd: str) -> str:
     import subprocess
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     return result.stdout + result.stderr
-
-run_command.__schema__ = { ... }
+run_command.__schema__ = {
+    "type": "function",
+    "function": {
+        "name": "run_command",
+        "description": "Python function source. Here is the implementation:\n\ndef run_command(cmd: str) -> str:\n    import subprocess\n    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n    return result.stdout + result.stderr",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cmd": {"type": "string", "description": "cmd"}
+            },
+            "required": ["cmd"]
+        }
+    }
+}
 
 coder = {
     "model": "qwen3:8b",
@@ -95,9 +145,14 @@ response = _infer(coder, "Write a hello, world program in C, save it to hello.c,
 print(response["message"]["content"])
 ```
 
-The em-dash replaces the inference call, but the boilerplate reduction goes further: tool schemas are auto-generated from function source, system prompts are inferred from variable names, and no manual JSON schema registration is needed. Everything is aligned with the same philosophy — reduce surface area so the LLM only reasons about what matters.
+### 3. Run it
 
-**Output:**
+```bash
+python transpiler.py hello.pyl > hello.py
+python hello.py
+```
+
+### 4. Output
 
 ```
   → calling write_file({'path': 'hello.c', 'content': '#include <stdio.h>\n...'})
@@ -110,45 +165,26 @@ The em-dash replaces the inference call, but the boilerplate reduction goes furt
 The "hello, world" program has been successfully executed!
 ```
 
-## How It Works
+## Why the em-dash
 
-Two-step transpile:
-
-1. Replace `NAME — "prompt"` with `_infer(NAME, "prompt", system="You are NAME.")`
-2. Parse the valid Python with `ast`, extract function source, attach `__schema__` attributes
-
-The generated `.py` file is fully inspectable. An intermediate `.tmp.py` is also written after step 1.
-
-## What It Does
-
-| What you write | What it becomes |
-|---|---|
-| `coder` | System prompt: `"You are coder."` |
-| `—` | `_infer()` — the full tool-calling loop |
-| `"prompt"` | User message |
-
-The preprocessor also generates tool schemas from function signatures and attaches them as `__schema__` attributes. The full function source becomes the tool description.
+It's not valid Python (tokenizer sees it as a NAME), so it's a clean extension. AI writing is notorious for it — the meme, the signature. We gave it a job. One character, minimal surface area. Reads naturally: `coder — "prompt"` = "invoke coder with prompt." Arrow semantics inverted from `->`. Absurd enough to be right.
 
 ## Design Decisions
 
-- No system prompts needed — the agent's name is the prompt  (`coder` → `"You are coder."`)
-- No tool prompts needed — the entire function source is used as the tool description
+- Variable name is the system prompt (`coder` → `"You are coder."`)
+- Function source is the tool description
 - Only `—` is new syntax — everything else is Python
 - No custom runtime — Python is the runtime
 - Generated code is fully inspectable
+- Tied to Ollama — other providers need changes to `_infer`
 
 ## Current State
 
-This is an early-stage conceptual project. It works for the hello world example, but barely does anything beyond that:
+Early-stage. Works for hello world. Not much beyond:
 
-- Only the em-dash (`—`) syntax is implemented
-- Tied to Ollama — no other providers
-- No streaming, no error handling, no retries
+- Only em-dash syntax
+- No streaming, no retries, no error handling
 - No memory, no context management, no multi-agent
-- Tool schemas are auto-generated from function source only
-
-We're actively building it out. This is a proof of concept, not a production tool.
-
 
 ## Quick Start
 

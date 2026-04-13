@@ -13,4 +13,5 @@ venv/
 hello
 hello.c
 hello.tmp.py
+hello.py
 * (Copy).*
