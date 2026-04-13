@@ -1,0 +1,26 @@
+def write_file(path: str, content: str) -> str:
+    with open(path, "w") as f:
+        f.write(content)
+    return f"wrote {path}"
+
+def read_file(path: str) -> str:
+    with open(path) as f:
+        return f.read()
+
+def run_command(cmd: str) -> str:
+    import subprocess
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+socrates = {
+    "model": "qwen3:8b",
+    "max_turns": 10,
+    "tools": [write_file, read_file, run_command]
+}
+
+while True:
+    prompt = input("you: ")
+    if not prompt:
+        break
+    response = socrates — prompt
+    print(f"\n  {response['message']['content']}\n")

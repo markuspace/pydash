@@ -25,10 +25,15 @@ def step1_replace_emdash(source: str) -> str:
             and i + 2 < len(tokens)
             and tokens[i + 1].type == tokenize.NAME
             and tokens[i + 1].string == "—"
-            and tokens[i + 2].type == tokenize.STRING
+            and tokens[i + 2].type in (tokenize.STRING, tokenize.NAME)
         ):
             name = tok.string
             prompt = tokens[i + 2].string
+            # If it's a NAME (variable), pass it through; if STRING, keep quotes
+            if tokens[i + 2].type == tokenize.NAME:
+                prompt_ref = prompt
+            else:
+                prompt_ref = prompt
             start = tok.start[1]
             end = tokens[i + 2].end[1]
             line_num = tok.start[0]
@@ -37,7 +42,7 @@ def step1_replace_emdash(source: str) -> str:
                     line_num,
                     start,
                     end,
-                    f'_infer({name}, {prompt}, system="You are {name}.")',
+                    f'_infer({name}, {prompt_ref}, system="You are {name}.")',
                 )
             )
             i += 3
